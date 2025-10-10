@@ -46,7 +46,7 @@ SongFormer is a music structure analysis framework that leverages multi-resoluti
 This model supports Hugging Face's from_pretrained method. To quickly get started with this code, you need to do two things:
 
 1. Follow the instructions in `Setting up Python Environment` to configure your Python environment
-2. Visit our Hugging Face model page and run the code provided in the README
+2. Visit our [Hugging Face model page](https://huggingface.co/ASLP-lab/SongFormer), and run the code provided in the README
 
 ## Installation
 
