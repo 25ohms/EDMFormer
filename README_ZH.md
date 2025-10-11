@@ -15,7 +15,23 @@
 [![Discord](https://img.shields.io/badge/Discord-join%20us-purple?logo=discord&logoColor=white)](https://discord.gg/p5uBryC4Zs)
 [![lab](https://img.shields.io/badge/🏫-ASLP-grey?labelColor=lightgrey)](http://www.npu-aslp.org/)
 
-Chunbo Hao<sup>&ast;</sup>, Ruibin Yuan<sup>&ast;</sup>, Jixun Yao, Qixin Deng, Xinyi Bai, Wei Xue, Lei Xie<sup>&dagger;</sup>
+<div align="center">
+  <h3>
+    Chunbo Hao<sup>1*</sup>, Ruibin Yuan<sup>2,5*</sup>, Jixun Yao<sup>1</sup>, Qixin Deng<sup>3,5</sup>, Xinyi Bai<sup>4,5</sup>, Wei Xue<sup>2</sup>, Lei Xie<sup>1†</sup>
+  </h3>
+  
+  <p>
+    <sup>*</sup>Equal contribution &nbsp;&nbsp; <sup>†</sup>Corresponding author
+  </p>
+  
+  <p>
+    <sup>1</sup>Audio, Speech and Language Processing Group (ASLP@NPU), Northwestern Polytechnical University<br>
+    <sup>2</sup>Hong Kong University of Science and Technology<br>
+    <sup>3</sup>Northwestern University<br>
+    <sup>4</sup>Cornell University<br>
+    <sup>5</sup>Multimodal Art Projection (M-A-P)
+  </p>
+</div>
 
 ----
 [ [English](README.md) ｜ 中文 ]
