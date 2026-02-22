@@ -377,6 +377,73 @@ bash train.sh
 - The relevant training dashboard will be displayed on `wandb`
 - Checkpoints will be located in `src/SongFormer/output`
 
+## EDMFormer - Train Instructions
+
+This repository is intended to be used as a submodule. All dataset preparation and orchestration must be handled externally and passed in via config. The following items are required for training to work as intended.
+
+External data artifacts you must provide:
+
+- Audio files for all songs.
+- Precomputed SSL embeddings for each song in four directories: MuQ 30s, MuQ 420s, MusicFM 30s, MusicFM 420s.
+- A labels JSONL file for your dataset (see schema below).
+- A split IDs text file listing base IDs, one per line.
+
+Critical format requirements:
+
+- Labels are case-sensitive and must be exactly: `intro`, `buildup`, `drop`, `breakdown`, `outro`, `silence`.
+- `end` is a terminal marker only and must be the last entry in each labels list.
+- The `id` in JSONL must match the audio filename stem and the embedding filename stem.
+- Embedding filenames must follow `<id>_<start_sec>.npy`.
+
+JSONL schema (one line per song):
+
+```jsonl
+{"id":"<audio_stem>","labels":[[start_time,"label"],...,[end_time,"end"]]}
+```
+
+Example JSONL line:
+
+```jsonl
+{"id":"01 - Oak - Airwalk","labels":[[0.054,"intro"],[35.942,"buildup"],[58.38,"silence"],[62.866,"drop"],[118.941,"breakdown"],[170.53,"buildup"],[188.474,"drop"],[224.361,"outro"],[247.0,"end"]]}
+```
+
+Config you must set externally:
+
+- In `src/SongFormer/configs/SongFormer.yaml`, add a dataset entry that points to your `label_path`, `split_ids_path`, and `input_embedding_dir`.
+- Set `dataset_type` to `EDMFormer` for your dataset entry.
+- Ensure `num_classes` remains greater than the maximum label ID (default `128` works).
+
+Notes:
+
+- `dataset.json` is not consumed directly by SongFormer training; it must be converted to JSONL.
+- Training expects embeddings to exist; raw audio is not ingested by the training pipeline.
+
+## EDMFormer - Fine Tuning
+
+Use fine tuning when you want to continue training from an existing checkpoint on the same label set and dataset type (`EDMFormer`). No code changes are required in this repo. You must supply the checkpoint and wire your config to point to it.
+
+External prerequisites:
+
+- A pre-trained checkpoint directory containing:
+  - `model.ckpt-<step>.pt`
+  - `checkpoint` (a text file that contains the filename above)
+- Your fine-tune dataset artifacts (same requirements as training):
+  - `labels.jsonl`
+  - `split_ids_path`
+  - 4 embedding directories (MuQ 30s/420s, MusicFM 30s/420s)
+
+Setup steps:
+
+- Ensure your dataset entry uses `dataset_type: "EDMFormer"` in `src/SongFormer/configs/SongFormer.yaml`.
+- Point `label_path`, `split_ids_path`, and `input_embedding_dir` to your fine-tune artifacts.
+- Launch training with `--checkpoint_dir` set to the directory that contains the pre-trained checkpoint files.
+- Use a new `--run_name` and/or a new `--checkpoint_dir` to avoid overwriting your original training run.
+
+Notes:
+
+- Fine tuning uses the same label set; do not change the label map.
+- If `checkpoint_dir` does not contain a `checkpoint` file, training starts from scratch.
+
 ## Citation
 
 If our work and codebase is useful for you, please cite as:
@@ -411,5 +478,3 @@ We look forward to hearing from you!
         <img src="figs/aslp.png" width="400"/>
     </a>
 </p>
-
-

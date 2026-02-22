@@ -68,6 +68,8 @@ LABEL_TO_ID = {
     "no-vocal-interlude": 66,
     "no-vocal-outro": 67,
     "NO_LABEL": 68,  # Only referring to cases without labels, this portion of labels will be ignored during the loss calculation process.
+    "buildup": 69,
+    "drop": 70,
 }
 
 ID_TO_LABEL = {v: k for k, v in LABEL_TO_ID.items()}
@@ -83,6 +85,7 @@ DATASET_LABEL_TO_DATASET_ID = {
     "SongForm-Hook": 6,
     "SongForm-Gem": 7,
     "SongForm-Gem-Only-Label": 8,  # Use only segments with labels in SongForm-Gem
+    "EDMFormer": 9,  # Custom EDM labels: intro, buildup, drop, breakdown, outro, silence
 }
 
 DATASET_ID_TO_DATASET_LABEL = {v: k for k, v in DATASET_LABEL_TO_DATASET_ID.items()}
@@ -160,4 +163,5 @@ DATASET_ID_ALLOWED_LABEL_IDS = {
     6: [0, 1, 2, 3, 4, 5, 6, 26],
     7: [0, 1, 2, 3, 4, 5, 6, 26],
     8: [0, 1, 2, 3, 4, 5, 6, 26],
+    9: [0, 5, 6, 36, 69, 70],
 }
