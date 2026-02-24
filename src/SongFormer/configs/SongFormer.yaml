@@ -81,35 +81,16 @@ local_maxima_filter_size: 3
 # ============================
 
 train_dataset:
-    _target_: dataset.SongFormerDataset.Dataset
+    _target_: edmformer_gcs_dataset.Dataset
     dataset_abstracts:
         [
             {
-                "internal_tmp_id": "SongForm-HX-8Class",
-                "dataset_type": "SongForm-HX-8Class",
-                "input_embedding_dir": "your_data_dir/30s_420s/harmonix/musicfm_hop420/layer_10 your_data_dir/30s_420s/harmonix/muq_hop420/layer_10 your_data_dir/420s/harmonix/musicfm_hop420/layer_10 your_data_dir/420s/harmonix/muq_hop420/layer_10",
-                "label_path": "your_data_dir/labels/harmonixset_8class_rule_revision.jsonl",
-                "split_ids_path": "your_data_dir/separated_ids/harmonixset_separated_ids_with_val_set/train.txt",
-                "multiplier": 4,
-            },
-            {
-                "internal_tmp_id": "SongForm-Private",
-                "dataset_type": "SongForm-Private",
-                "input_embedding_dir": "your_data_dir/30s_420s/Internal_data/musicfm_hop420/layer_10 your_data_dir/30s_420s/Internal_data/muq_hop420/layer_10 your_data_dir/420s/Internal_data/musicfm_hop420/layer_10 your_data_dir/420s/Internal_data/muq_hop420/layer_10",
-                "label_path": "your_data_dir/labels/0006_single_layer_transformer_musicfm_muq_along_time_00_5k_v1.jsonl",
-                "split_ids_path": "your_data_dir/separated_ids/internal_data_sofa_clean/train.txt",
+                "internal_tmp_id": "EDMFormer",
+                "dataset_type": "EDMFormer",
+                "input_embedding_dir": "gs://edmformer-data/embeddings/musicfm_30s gs://edmformer-data/embeddings/muq_30s gs://edmformer-data/embeddings/musicfm_420s gs://edmformer-data/embeddings/muq_420s",
+                "label_path": "gs://edmformer-data/metadata/dataset.jsonl",
+                "split_ids_path": "gs://edmformer-data/metadata/split_ids.txt",
                 "multiplier": 1,
-            },
-            {
-                adapter: HookTheoryAdapter,
-                internal_tmp_id: "SongForm-Hook",
-                structure_jsonl_paths: [
-                    "your_data_dir/HookTheoryStructure.train.jsonl"
-                ],
-                dataset_type: "SongForm-Hook",
-                input_embedding_dir: "your_data_dir/30s_420s/HookTheory/musicfm_hop420/layer_10 your_data_dir/30s_420s/HookTheory/muq_hop420/layer_10 your_data_dir/420s/HookTheory/musicfm_hop420/layer_10 your_data_dir/420s/HookTheory/muq_hop420/layer_10",
-                split_ids_path: "your_data_dir/separated_ids/hooktheory_separated_ids/train.txt",
-                multiplier: 1,
             },
         ]
     hparams:
@@ -122,15 +103,15 @@ train_dataset:
         frame_rates: ${frame_rates}
 
 eval_dataset:
-    _target_: dataset.SongFormerDataset.Dataset
+    _target_: edmformer_gcs_dataset.Dataset
     dataset_abstracts:
         [
             {
-                "internal_tmp_id": "SongForm-HX-8Classs_val",
-                "dataset_type": "SongForm-HX-8Class",
-                "input_embedding_dir": "your_data_dir/30s_420s/harmonix/musicfm_hop420/layer_10 your_data_dir/30s_420s/harmonix/muq_hop420/layer_10 your_data_dir/420s/harmonix/musicfm_hop420/layer_10 your_data_dir/420s/harmonix/muq_hop420/layer_10",
-                "label_path": "your_data_dir/processed_data/labels/harmonixset_8class_rule_revision.jsonl",
-                "split_ids_path": "your_data_dir/separated_ids/harmonixset_separated_ids_with_val_set/val.txt",
+                "internal_tmp_id": "EDMFormer-val",
+                "dataset_type": "EDMFormer",
+                "input_embedding_dir": "gs://edmformer-data/embeddings/musicfm_30s gs://edmformer-data/embeddings/muq_30s gs://edmformer-data/embeddings/musicfm_420s gs://edmformer-data/embeddings/muq_420s",
+                "label_path": "gs://edmformer-data/metadata/dataset.jsonl",
+                "split_ids_path": "gs://edmformer-data/metadata/split_ids_val.txt",
                 "multiplier": 1,
             },
         ]
