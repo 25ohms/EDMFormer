@@ -15,7 +15,7 @@ import pandas as pd
 import torch
 from accelerate import Accelerator
 from accelerate.local_sgd import LocalSGD
-from accelerate.utils import LoggerType, set_seed
+from accelerate.utils import LoggerType, set_seed, DistributedDataParallelKwargs
 
 # from ema import LitEma
 from ema_pytorch import EMA
@@ -248,6 +248,7 @@ def main(args, hparams):
         log_with=["wandb", LoggerType.MLFLOW],
         project_dir=os.path.join(args.checkpoint_dir, "tracker"),
         gradient_accumulation_steps=hparams.accumulation_steps,
+        kwargs_handlers=[DistributedDataParallelKwargs(find_unused_parameters=True)],
     )
 
     device = accelerator.device
@@ -284,6 +285,7 @@ def main(args, hparams):
     Model = getattr(module, "Model")
     model = Model(hparams)
     params = model.parameters()
+    model_ema = None
 
     if accelerator.is_main_process:
         model_ema = EMA(model, include_online_model=False, **hparams.ema_kwargs)
@@ -311,6 +313,7 @@ def main(args, hparams):
         rescale_grads=True,
         monitor=True,
     )
+    use_balancer = accelerator.num_processes == 1
 
     optimizer = optim.Adam(
         model.parameters(),
@@ -389,14 +392,18 @@ def main(args, hparams):
                             logits, loss, losses = model(batch)
 
                         with TrainTimer(global_step, "time/backward_time", accelerator):
-                            loss_sum = balancer.cal_mix_loss(
-                                {
-                                    "loss_section": losses["loss_section"],
-                                    "loss_function": losses["loss_function"],
-                                },
-                                list(model.parameters()),
-                                accelerator=accelerator,
-                            )
+                            if use_balancer:
+                                loss_sum = balancer.cal_mix_loss(
+                                    {
+                                        "loss_section": losses["loss_section"],
+                                        "loss_function": losses["loss_function"],
+                                    },
+                                    list(model.parameters()),
+                                    accelerator=accelerator,
+                                )
+                            else:
+                                # Avoid Balancer autograd.grad path under DDP.
+                                loss_sum = losses["loss"]
 
                             accelerator.backward(loss_sum)
 
