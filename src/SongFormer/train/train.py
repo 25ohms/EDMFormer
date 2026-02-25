@@ -347,8 +347,9 @@ def main(args, hparams):
     )
 
     # early stop
-    best_hr5 = -float("inf")
-    best_acc = -float("inf")
+    best_hr05 = -float("inf")
+    best_hr3 = -float("inf")
+    best_score = -float("inf")
     no_improve_steps = 0
     early_stop_patience = (
         hparams.early_stopping_step
@@ -467,15 +468,21 @@ def main(args, hparams):
                                     step=global_step,
                                 )
 
-                                hr5 = eval_res.get("dataset_5_HitRate_0.5F", 0)
-                                acc = eval_res.get("dataset_5_acc", 0)
+                                hr05 = eval_res.get("dataset_9_HitRate_0.5F", 0)
+                                hr3 = eval_res.get("dataset_9_HitRate_3F", 0)
+                                acc = eval_res.get("dataset_9_acc", 0)
+                                score = 0.5 * (hr05 + hr3)
 
-                                if hr5 > best_hr5 or acc > best_acc:
+                                if score > best_score:
                                     print(
-                                        f"Eval improved: dataset_5_HitRate_0.5F {hr5:.4f} (prev {best_hr5:.4f}), dataset_5_acc {acc:.4f} (prev {best_acc:.4f})"
+                                        "Eval improved: "
+                                        f"dataset_9_HitRate_0.5F {hr05:.4f} (prev {best_hr05:.4f}), "
+                                        f"dataset_9_HitRate_3F {hr3:.4f} (prev {best_hr3:.4f}), "
+                                        f"score {score:.4f} (prev {best_score:.4f})"
                                     )
-                                    best_hr5 = max(best_hr5, hr5)
-                                    best_acc = max(best_acc, acc)
+                                    best_hr05 = max(best_hr05, hr05)
+                                    best_hr3 = max(best_hr3, hr3)
+                                    best_score = max(best_score, score)
                                     no_improve_steps = 0
 
                                     tmp_ckpt_path = save_checkpoint(
@@ -498,7 +505,7 @@ def main(args, hparams):
                                         "a",
                                     ) as f:
                                         f.write(
-                                            f"model.ckpt-{global_step}.pt hr5: {hr5}, acc: {acc} \n"
+                                        f"model.ckpt-{global_step}.pt hr0.5: {hr05}, hr3: {hr3}, score: {score}, acc: {acc}\n"
                                         )
                                     print("Saved best checkpoint at step", global_step)
                                 else:

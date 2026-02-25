@@ -7,7 +7,7 @@ input_dim: 2048             # Input Dimension after Linear Layer
 
 # Downsampling Module
 down_sample_conv_kernel_size: 3
-down_sample_conv_stride: 3
+down_sample_conv_stride: 2
 down_sample_conv_dropout: 0.1
 down_sample_conv_padding: 0
 
@@ -31,11 +31,11 @@ total_steps: 12010
 warmup_max_lr: 0.0001
 
 # frame rates after downsampling
-output_logits_frame_rates: 8.333
+output_logits_frame_rates: 12.5
 # it means output_logits_frame_rates = input_embd_frame_rates // downsample_rates, because the padding is 0.
-downsample_rates: 3
+downsample_rates: 2
 # frame rates after downsampling, used by model and post process
-frame_rates: 8.333
+frame_rates: 12.5
 
 # ema config
 ema_kwargs:
@@ -52,15 +52,15 @@ label_focal_loss_alpha: 0.25
 label_focal_loss_gamma: 2.0
 
 # Boundary TV loss
-boundary_tvloss_weight: 0.05
+boundary_tvloss_weight: 0.03
 
 boundary_tv_loss_beta: 0.6
 boundary_tv_loss_lambda: 0.4
 boundary_tv_loss_boundary_threshold: 0.01
 boundary_tv_loss_reduction_weight: 0.1
 
-loss_weight_section: 0.2
-loss_weight_function: 0.8
+loss_weight_section: 0.4
+loss_weight_function: 0.6
 
 # ============================
 # Training config
@@ -68,7 +68,7 @@ loss_weight_function: 0.8
 
 # Number of neighbors used to augment boundaries in the dataset.
 # Example: 1/25*3 * 10s = 1.2s (both sides total 4.2s)
-num_neighbors: 10
+num_neighbors: 12
 learn_label: true
 learn_segment: true
 accumulation_steps: 2
