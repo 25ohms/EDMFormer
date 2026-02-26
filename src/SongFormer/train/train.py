@@ -484,6 +484,37 @@ def run_training(
                                 # Avoid Balancer autograd.grad path under DDP.
                                 loss_sum = losses["loss"]
 
+                            invalid_loss = (not loss_sum.requires_grad) or (
+                                not torch.isfinite(loss_sum)
+                            )
+                            if invalid_loss:
+                                flag = torch.tensor(
+                                    1, device=accelerator.device, dtype=torch.int
+                                )
+                                if accelerator.num_processes > 1:
+                                    flag = accelerator.gather(flag)
+                                    if flag.max().item() > 0:
+                                        if accelerator.is_main_process:
+                                            data_ids = batch.get("data_ids")
+                                            print(
+                                                "Skipping batch due to invalid loss "
+                                                f"(requires_grad={loss_sum.requires_grad}, "
+                                                f"finite={bool(torch.isfinite(loss_sum))}). "
+                                                f"data_ids={data_ids}"
+                                            )
+                                        optimizer.zero_grad(set_to_none=True)
+                                        continue
+                                else:
+                                    data_ids = batch.get("data_ids")
+                                    print(
+                                        "Skipping batch due to invalid loss "
+                                        f"(requires_grad={loss_sum.requires_grad}, "
+                                        f"finite={bool(torch.isfinite(loss_sum))}). "
+                                        f"data_ids={data_ids}"
+                                    )
+                                    optimizer.zero_grad(set_to_none=True)
+                                    continue
+
                             accelerator.backward(loss_sum)
 
                         with TrainTimer(global_step, "time/optimize_time", accelerator):
