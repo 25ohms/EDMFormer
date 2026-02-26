@@ -692,6 +692,11 @@ def run_training(
                         exit(-1)
                     except Exception:
                         traceback.print_exc()
+                        # In multi-GPU DDP, swallowing an exception desynchronizes ranks and
+                        # triggers "Expected to have finished reduction" on the next step.
+                        # Fail fast so the real root-cause is visible.
+                        if accelerator.num_processes > 1:
+                            raise
                         # print(features["filenames"], features["seq_lens"], features["seqs"].shape)
                         optimizer.zero_grad()
 
