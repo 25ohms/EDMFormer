@@ -504,6 +504,18 @@ class Model(nn.Module):
         dataset_prefix = self.dataset_class_prefix(batch["dataset_ids"])
         logits = self.AddFuse(x=logits, cond=dataset_prefix.unsqueeze(1))
         src_key_padding_mask = batch["masks"]
+        if src_key_padding_mask is not None:
+            seq_len = logits.shape[1]
+            mask_len = src_key_padding_mask.shape[1]
+            if mask_len != seq_len:
+                if mask_len > seq_len:
+                    src_key_padding_mask = src_key_padding_mask[:, :seq_len]
+                else:
+                    src_key_padding_mask = F.pad(
+                        src_key_padding_mask,
+                        (0, seq_len - mask_len),
+                        value=True,
+                    )
         logits = self.transformer(x=logits, src_key_padding_mask=src_key_padding_mask)
 
         function_logits = self.function_head(logits)
