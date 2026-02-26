@@ -471,11 +471,6 @@ class Model(nn.Module):
             batch["function_mask"] = align_time(
                 batch["function_mask"], dim=1, pad_value=True
             )
-        if "label_id_masks" in batch:
-            batch["label_id_masks"] = align_time(
-                batch["label_id_masks"], dim=2, pad_value=True
-            )
-
         loss_section = F.binary_cross_entropy_with_logits(
             outputs["boundary_logits"],
             batch["widen_true_boundaries"],
