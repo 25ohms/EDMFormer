@@ -441,6 +441,40 @@ class Model(nn.Module):
     def compute_losses(self, outputs, batch, prefix: str = None):
         loss = 0.0
         losses = {}
+        seq_len = outputs["boundary_logits"].shape[1]
+
+        def align_time(tensor, dim, pad_value):
+            if tensor is None:
+                return None
+            current = tensor.size(dim)
+            if current == seq_len:
+                return tensor
+            if current > seq_len:
+                return tensor.narrow(dim, 0, seq_len)
+            pad_shape = list(tensor.shape)
+            pad_shape[dim] = seq_len - current
+            pad_tensor = tensor.new_full(pad_shape, pad_value)
+            return torch.cat([tensor, pad_tensor], dim=dim)
+
+        batch["widen_true_boundaries"] = align_time(
+            batch["widen_true_boundaries"], dim=1, pad_value=0.0
+        )
+        batch["true_functions"] = align_time(
+            batch["true_functions"], dim=1, pad_value=0.0
+        )
+        batch["masks"] = align_time(batch["masks"], dim=1, pad_value=True)
+        if "boundary_mask" in batch:
+            batch["boundary_mask"] = align_time(
+                batch["boundary_mask"], dim=1, pad_value=True
+            )
+        if "function_mask" in batch:
+            batch["function_mask"] = align_time(
+                batch["function_mask"], dim=1, pad_value=True
+            )
+        if "label_id_masks" in batch:
+            batch["label_id_masks"] = align_time(
+                batch["label_id_masks"], dim=2, pad_value=True
+            )
 
         loss_section = F.binary_cross_entropy_with_logits(
             outputs["boundary_logits"],
