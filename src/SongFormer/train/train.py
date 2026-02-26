@@ -25,11 +25,12 @@ from omegaconf import OmegaConf
 from eval_infer_results_used_in_train import eval_infer_results
 from vis_infer_chunk_class_used_in_train import vis_infer_chunk
 from torch import optim
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
 from transformers import get_cosine_schedule_with_warmup
 from utils.check_nan import NanInfError, check_model_param
 from utils.timer import TrainTimer
+from dataset.label2id import DATASET_LABEL_TO_DATASET_ID
 
 # for lance
 torch.multiprocessing.set_start_method("spawn", force=True)
@@ -181,6 +182,46 @@ def evaluate(model, eval_data_loader, accelerator, global_step):
     return flat_result
 
 
+def _resolve_primary_dataset_id(hparams):
+    try:
+        dataset_abstracts = hparams.train_dataset.dataset_abstracts
+        if not dataset_abstracts:
+            return None
+        dataset_type = dataset_abstracts[0].get("dataset_type")
+        if not dataset_type:
+            return None
+        return DATASET_LABEL_TO_DATASET_ID.get(dataset_type)
+    except Exception:
+        return None
+
+
+def _split_cv_indices(num_items: int, folds: int, seed: int):
+    if folds <= 1:
+        return [np.arange(num_items)]
+    rng = np.random.default_rng(seed)
+    indices = np.arange(num_items)
+    rng.shuffle(indices)
+    return np.array_split(indices, folds)
+
+
+def _pick_metric(eval_res, dataset_id, metric_name):
+    key = None
+    value = None
+    if dataset_id is not None:
+        dataset_key = f"dataset_{dataset_id}_valid_{metric_name}"
+        if dataset_key in eval_res:
+            return eval_res[dataset_key], dataset_key
+    overall_key = f"overall_valid_{metric_name}"
+    if overall_key in eval_res:
+        return eval_res[overall_key], overall_key
+    for k, v in eval_res.items():
+        if k.endswith(f"valid_{metric_name}"):
+            key = k
+            value = v
+            break
+    return value, key
+
+
 def test_metrics(accelerator, model, hparams, ckpt_path, infer_dicts):
     with torch.no_grad():
 
@@ -242,6 +283,16 @@ def prefix_dict(d, prefix: str):
 
 
 def main(args, hparams):
+    return run_training(args, hparams)
+
+
+def run_training(
+    args,
+    hparams,
+    train_dataset=None,
+    eval_dataset=None,
+    primary_dataset_id=None,
+):
     assert hasattr(args, "init_seed"), "hparams should have seed attribute"
     set_seed(args.init_seed)
     accelerator = Accelerator(
@@ -295,8 +346,12 @@ def main(args, hparams):
     for param in params:
         num_params += torch.prod(torch.tensor(param.size()))
 
-    train_dataset = hydra.utils.instantiate(hparams.train_dataset)
-    eval_dataset = hydra.utils.instantiate(hparams.eval_dataset)
+    if train_dataset is None:
+        train_dataset = hydra.utils.instantiate(hparams.train_dataset)
+    if eval_dataset is None:
+        eval_dataset = hydra.utils.instantiate(hparams.eval_dataset)
+    if primary_dataset_id is None:
+        primary_dataset_id = _resolve_primary_dataset_id(hparams)
 
     data_loader = DataLoader(
         train_dataset, **hparams.train_dataloader, collate_fn=train_dataset.collate_fn
@@ -350,6 +405,7 @@ def main(args, hparams):
     best_hr05 = -float("inf")
     best_hr3 = -float("inf")
     best_score = -float("inf")
+    best_eval_res = None
     no_improve_steps = 0
     early_stop_patience = (
         hparams.early_stopping_step
@@ -455,35 +511,73 @@ def main(args, hparams):
                             if rank == 0:
                                 model.eval()
 
-                                eval_res = evaluate(
+                                raw_eval_res = evaluate(
                                     model=model_ema,
                                     eval_data_loader=eval_data_loader,
                                     accelerator=accelerator,
                                     global_step=global_step,
                                 )
 
-                                eval_res = prefix_dict(d=eval_res, prefix="eval/")
+                                eval_res = prefix_dict(d=raw_eval_res, prefix="eval/")
                                 accelerator.log(
                                     eval_res,
                                     step=global_step,
                                 )
+                                if primary_dataset_id is not None:
+                                    dataset_prefix = (
+                                        f"eval/dataset_{primary_dataset_id}_"
+                                    )
+                                    dataset_metrics = {
+                                        k: v
+                                        for k, v in eval_res.items()
+                                        if k.startswith(dataset_prefix)
+                                    }
+                                    if not dataset_metrics:
+                                        fallback_prefix = (
+                                            f"dataset_{primary_dataset_id}_"
+                                        )
+                                        dataset_metrics = {
+                                            k: v
+                                            for k, v in eval_res.items()
+                                            if k.startswith(fallback_prefix)
+                                        }
+                                    if dataset_metrics:
+                                        print_rank_0(
+                                            f"Eval metrics (dataset {primary_dataset_id}): {dataset_metrics}"
+                                        )
 
-                                hr05 = eval_res.get("dataset_9_HitRate_0.5F", 0)
-                                hr3 = eval_res.get("dataset_9_HitRate_3F", 0)
-                                acc = eval_res.get("dataset_9_acc", 0)
+                                hr05, hr05_key = _pick_metric(
+                                    raw_eval_res,
+                                    primary_dataset_id,
+                                    "HitRate_0.5F",
+                                )
+                                hr3, hr3_key = _pick_metric(
+                                    raw_eval_res,
+                                    primary_dataset_id,
+                                    "HitRate_3F",
+                                )
+                                acc, acc_key = _pick_metric(
+                                    raw_eval_res, primary_dataset_id, "acc"
+                                )
+                                hr05 = hr05 or 0
+                                hr3 = hr3 or 0
+                                acc = acc or 0
                                 score = 0.5 * (hr05 + hr3)
 
                                 if score > best_score:
                                     print(
                                         "Eval improved: "
-                                        f"dataset_9_HitRate_0.5F {hr05:.4f} (prev {best_hr05:.4f}), "
-                                        f"dataset_9_HitRate_3F {hr3:.4f} (prev {best_hr3:.4f}), "
+                                        f"{hr05_key or 'HitRate_0.5F'} {hr05:.4f} "
+                                        f"(prev {best_hr05:.4f}), "
+                                        f"{hr3_key or 'HitRate_3F'} {hr3:.4f} "
+                                        f"(prev {best_hr3:.4f}), "
                                         f"score {score:.4f} (prev {best_score:.4f})"
                                     )
                                     best_hr05 = max(best_hr05, hr05)
                                     best_hr3 = max(best_hr3, hr3)
                                     best_score = max(best_score, score)
                                     no_improve_steps = 0
+                                    best_eval_res = eval_res
 
                                     tmp_ckpt_path = save_checkpoint(
                                         checkpoint_dir=args.checkpoint_dir,
@@ -505,7 +599,7 @@ def main(args, hparams):
                                         "a",
                                     ) as f:
                                         f.write(
-                                        f"model.ckpt-{global_step}.pt hr0.5: {hr05}, hr3: {hr3}, score: {score}, acc: {acc}\n"
+                                            f"model.ckpt-{global_step}.pt hr0.5: {hr05}, hr3: {hr3}, score: {score}, acc: {acc}\n"
                                         )
                                     print("Saved best checkpoint at step", global_step)
                                 else:
@@ -612,6 +706,7 @@ def main(args, hparams):
             )
 
     accelerator.end_training()
+    return best_eval_res
 
 
 if __name__ == "__main__":
@@ -662,6 +757,18 @@ if __name__ == "__main__":
         default=None,
         help="Interval (in steps) to run evaluation",
     )
+    parser.add_argument(
+        "--cv_folds",
+        type=int,
+        default=1,
+        help="If >1, run K-fold CV on the training set.",
+    )
+    parser.add_argument(
+        "--cv_seed",
+        type=int,
+        default=None,
+        help="Random seed used to split folds.",
+    )
 
     # ---------------- Training process control parameters ----------------
     parser.add_argument(
@@ -699,4 +806,54 @@ if __name__ == "__main__":
         args.tags = hp.args.tags
     args.keep_step = not args.not_keep_step
 
-    main(args, hp)
+    if args.cv_folds <= 1:
+        main(args, hp)
+    else:
+        primary_dataset_id = _resolve_primary_dataset_id(hp)
+        full_dataset = hydra.utils.instantiate(hp.train_dataset)
+        num_items = len(full_dataset)
+        if num_items == 0:
+            raise SystemExit("Training dataset is empty; cannot run CV.")
+
+        cv_seed = args.cv_seed if args.cv_seed is not None else args.init_seed
+        fold_indices = _split_cv_indices(num_items, args.cv_folds, cv_seed)
+        fold_metrics = []
+
+        for fold_idx, val_idx in enumerate(fold_indices):
+            train_idx = np.setdiff1d(np.arange(num_items), val_idx, assume_unique=False)
+            train_subset = Subset(full_dataset, train_idx.tolist())
+            eval_subset = Subset(full_dataset, val_idx.tolist())
+
+            fold_args = copy.deepcopy(args)
+            fold_args.init_seed = cv_seed + fold_idx
+            if fold_args.run_name:
+                fold_args.run_name = f"{fold_args.run_name}_fold{fold_idx}"
+            if fold_args.checkpoint_dir:
+                fold_args.checkpoint_dir = os.path.join(
+                    fold_args.checkpoint_dir, f"fold{fold_idx}"
+                )
+
+            print(
+                f"Starting CV fold {fold_idx + 1}/{args.cv_folds}: "
+                f"train={len(train_subset)} eval={len(eval_subset)} "
+                f"seed={fold_args.init_seed}"
+            )
+
+            best_eval = run_training(
+                fold_args,
+                hp,
+                train_dataset=train_subset,
+                eval_dataset=eval_subset,
+                primary_dataset_id=primary_dataset_id,
+            )
+            if best_eval:
+                fold_metrics.append(best_eval)
+
+        if fold_metrics:
+            keys = fold_metrics[0].keys()
+            cv = {}
+            for k in keys:
+                cv[k] = float(
+                    sum(m.get(k, 0.0) for m in fold_metrics) / len(fold_metrics)
+                )
+            print(f"CV metrics (mean over {len(fold_metrics)} folds): {cv}")
