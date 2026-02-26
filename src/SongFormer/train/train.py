@@ -448,7 +448,18 @@ def run_training(
             for step, batch in enumerate(data_loader):
                 if global_step >= max_steps:
                     break
-                if batch is None:
+                skip_flag = torch.tensor(
+                    1 if batch is None else 0, device=accelerator.device
+                )
+                if accelerator.num_processes > 1:
+                    skip_flag = accelerator.gather(skip_flag)
+                    if skip_flag.max().item() > 0:
+                        if accelerator.is_main_process:
+                            print(
+                                "Skipping batch because at least one rank received an invalid batch."
+                            )
+                        continue
+                elif skip_flag.item() > 0:
                     continue
                 with accelerator.accumulate(model):
                     model.train()
