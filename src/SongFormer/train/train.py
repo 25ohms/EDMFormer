@@ -204,6 +204,15 @@ def _split_cv_indices(num_items: int, folds: int, seed: int):
     return np.array_split(indices, folds)
 
 
+def _get_collate_fn(dataset):
+    current = dataset
+    while current is not None:
+        if hasattr(current, "collate_fn"):
+            return current.collate_fn
+        current = getattr(current, "dataset", None)
+    return None
+
+
 def _pick_metric(eval_res, dataset_id, metric_name):
     key = None
     value = None
@@ -353,11 +362,13 @@ def run_training(
     if primary_dataset_id is None:
         primary_dataset_id = _resolve_primary_dataset_id(hparams)
 
+    train_collate = _get_collate_fn(train_dataset)
+    eval_collate = _get_collate_fn(eval_dataset)
     data_loader = DataLoader(
-        train_dataset, **hparams.train_dataloader, collate_fn=train_dataset.collate_fn
+        train_dataset, **hparams.train_dataloader, collate_fn=train_collate
     )
     eval_data_loader = DataLoader(
-        eval_dataset, **hparams.eval_dataloader, collate_fn=eval_dataset.collate_fn
+        eval_dataset, **hparams.eval_dataloader, collate_fn=eval_collate
     )
 
     warmup_steps = hparams.warmup_steps
