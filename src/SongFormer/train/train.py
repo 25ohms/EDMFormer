@@ -515,6 +515,19 @@ def run_training(
                                     optimizer.zero_grad(set_to_none=True)
                                     continue
 
+                            if (
+                                accelerator.num_processes > 1
+                                and os.environ.get("DDP_DUMMY_LOSS", "1") != "0"
+                            ):
+                                dummy = None
+                                for p in model.parameters():
+                                    if not p.requires_grad:
+                                        continue
+                                    term = p.view(-1)[0] * 0.0
+                                    dummy = term if dummy is None else dummy + term
+                                if dummy is not None:
+                                    loss_sum = loss_sum + dummy
+
                             accelerator.backward(loss_sum)
 
                         with TrainTimer(global_step, "time/optimize_time", accelerator):
