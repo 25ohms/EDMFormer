@@ -288,17 +288,22 @@ class Model(nn.Module):
         assert gt_info[-1][1] == "end" and msa_info[-1][1] == "end", (
             "gt_info and msa_info should end with 'end'"
         )
+        def _sanitize_times(times, min_gap=1e-6):
+            times = np.asarray(times, dtype=float)
+            if times.size == 0:
+                return times
+            for i in range(1, len(times)):
+                if times[i] <= times[i - 1]:
+                    times[i] = times[i - 1] + min_gap
+            return times
+
         gt_info_labels = [label for time_, label in gt_info][:-1]
-        gt_info_inters = [time_ for time_, label in gt_info]
-        gt_info_inters = np.column_stack(
-            [np.array(gt_info_inters[:-1]), np.array(gt_info_inters[1:])]
-        )
+        gt_times = _sanitize_times([time_ for time_, label in gt_info])
+        gt_info_inters = np.column_stack([gt_times[:-1], gt_times[1:]])
 
         msa_info_labels = [label for time_, label in msa_info][:-1]
-        msa_info_inters = [time_ for time_, label in msa_info]
-        msa_info_inters = np.column_stack(
-            [np.array(msa_info_inters[:-1]), np.array(msa_info_inters[1:])]
-        )
+        msa_times = _sanitize_times([time_ for time_, label in msa_info])
+        msa_info_inters = np.column_stack([msa_times[:-1], msa_times[1:]])
         result = compute_results(
             ann_inter=gt_info_inters,
             est_inter=msa_info_inters,
