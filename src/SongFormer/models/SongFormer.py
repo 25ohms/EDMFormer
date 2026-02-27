@@ -390,7 +390,46 @@ class Model(nn.Module):
                 logits=logits, config=self.config
             )
             gt_info = batch["msa_infos"][0]
-            results = self.cal_metrics(gt_info=gt_info, msa_info=msa_info)
+            try:
+                results = self.cal_metrics(gt_info=gt_info, msa_info=msa_info)
+            except Exception as exc:
+                data_id = None
+                if isinstance(batch, dict):
+                    data_ids = batch.get("data_ids")
+                    if isinstance(data_ids, (list, tuple)) and data_ids:
+                        data_id = data_ids[0]
+
+                gt_times = [time_ for time_, _ in gt_info]
+                msa_times = [time_ for time_, _ in msa_info]
+
+                def _bad_intervals(times):
+                    times = np.asarray(times, dtype=float)
+                    if times.size < 2:
+                        return True, np.empty((0, 2))
+                    inters = np.column_stack([times[:-1], times[1:]])
+                    bad = (~np.isfinite(inters)).any(axis=1) | (
+                        inters[:, 1] <= inters[:, 0]
+                    )
+                    return bad.any(), inters[bad][:5]
+
+                gt_bad, gt_bad_inters = _bad_intervals(gt_times)
+                msa_bad, msa_bad_inters = _bad_intervals(msa_times)
+
+                print(
+                    "METRICS_ERROR",
+                    {
+                        "data_id": data_id,
+                        "gt_bad": gt_bad,
+                        "msa_bad": msa_bad,
+                        "gt_bad_inters": gt_bad_inters.tolist(),
+                        "msa_bad_inters": msa_bad_inters.tolist(),
+                        "gt_info_head": gt_info[:5],
+                        "gt_info_tail": gt_info[-5:],
+                        "msa_info_head": msa_info[:5],
+                        "msa_info_tail": msa_info[-5:],
+                    },
+                )
+                raise exc
 
         ret_results = {
             "loss": losses["loss"].item(),
