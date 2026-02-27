@@ -351,6 +351,27 @@ def run_training(
     module = importlib.import_module("models." + args.model_name)
     Model = getattr(module, "Model")
     model = Model(hparams)
+    if args.pretrained_ckpt:
+        ckpt = load_checkpoint(args.pretrained_ckpt, device="cpu")
+        state_dict = None
+        if args.pretrained_key and args.pretrained_key in ckpt:
+            state_dict = ckpt[args.pretrained_key]
+        elif "model" in ckpt:
+            state_dict = ckpt["model"]
+        elif "state_dict" in ckpt:
+            state_dict = ckpt["state_dict"]
+        elif "model_state_dict" in ckpt:
+            state_dict = ckpt["model_state_dict"]
+        else:
+            state_dict = ckpt
+        missing, unexpected = model.load_state_dict(
+            state_dict, strict=args.pretrained_strict
+        )
+        print_rank_0(
+            f"Loaded pretrained checkpoint: {args.pretrained_ckpt} "
+            f"(missing={len(missing)}, unexpected={len(unexpected)})"
+        )
+        del ckpt, state_dict
     params = model.parameters()
     model_ema = None
 
@@ -797,6 +818,23 @@ if __name__ == "__main__":
         type=str,
         default=None,
         help="Model name (overrides config if provided)",
+    )
+    parser.add_argument(
+        "--pretrained_ckpt",
+        type=str,
+        default=None,
+        help="Path to pretrained checkpoint to initialize model weights.",
+    )
+    parser.add_argument(
+        "--pretrained_strict",
+        action="store_true",
+        help="If set, require strict key matching when loading pretrained checkpoint.",
+    )
+    parser.add_argument(
+        "--pretrained_key",
+        type=str,
+        default=None,
+        help="Optional key within the checkpoint dict to use as state_dict.",
     )
     parser.add_argument(
         "--checkpoint_dir", type=str, default=None, help="Directory to save checkpoints"
