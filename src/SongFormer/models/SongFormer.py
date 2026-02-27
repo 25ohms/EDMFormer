@@ -315,6 +315,33 @@ class Model(nn.Module):
         msa_times = _sanitize_times([time_ for time_, label in msa_info])
         msa_info_inters = np.column_stack([msa_times[:-1], msa_times[1:]])
         msa_info_inters = _sanitize_intervals(msa_info_inters)
+
+        # Trim predicted intervals to ground-truth end to avoid zero-length
+        # intervals after mir_eval.adjust_intervals clipping.
+        if gt_info_inters.size > 0 and msa_info_inters.size > 0:
+            ann_end = float(gt_info_inters.max())
+            keep_mask = msa_info_inters[:, 0] < ann_end
+            if keep_mask.any():
+                msa_info_inters = msa_info_inters[keep_mask]
+                msa_info_labels = [
+                    lbl
+                    for lbl, keep in zip(msa_info_labels, keep_mask.tolist())
+                    if keep
+                ]
+                msa_info_inters[:, 1] = np.minimum(msa_info_inters[:, 1], ann_end)
+                pos_mask = msa_info_inters[:, 1] > msa_info_inters[:, 0]
+                if pos_mask.any():
+                    msa_info_inters = msa_info_inters[pos_mask]
+                    msa_info_labels = [
+                        lbl
+                        for lbl, keep in zip(msa_info_labels, pos_mask.tolist())
+                        if keep
+                    ]
+            else:
+                # No valid intervals remain; keep a single span to avoid eval crash.
+                msa_info_inters = np.array([[0.0, ann_end]], dtype=float)
+                msa_info_labels = [msa_info_labels[0] if msa_info_labels else "intro"]
+
         result = compute_results(
             ann_inter=gt_info_inters,
             est_inter=msa_info_inters,
