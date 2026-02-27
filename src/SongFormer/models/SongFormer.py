@@ -297,13 +297,24 @@ class Model(nn.Module):
                     times[i] = times[i - 1] + min_gap
             return times
 
+        def _sanitize_intervals(inters, min_gap=1e-6):
+            inters = np.asarray(inters, dtype=float)
+            if inters.size == 0:
+                return inters
+            for i in range(len(inters)):
+                if inters[i, 1] <= inters[i, 0]:
+                    inters[i, 1] = inters[i, 0] + min_gap
+            return inters
+
         gt_info_labels = [label for time_, label in gt_info][:-1]
         gt_times = _sanitize_times([time_ for time_, label in gt_info])
         gt_info_inters = np.column_stack([gt_times[:-1], gt_times[1:]])
+        gt_info_inters = _sanitize_intervals(gt_info_inters)
 
         msa_info_labels = [label for time_, label in msa_info][:-1]
         msa_times = _sanitize_times([time_ for time_, label in msa_info])
         msa_info_inters = np.column_stack([msa_times[:-1], msa_times[1:]])
+        msa_info_inters = _sanitize_intervals(msa_info_inters)
         result = compute_results(
             ann_inter=gt_info_inters,
             est_inter=msa_info_inters,
